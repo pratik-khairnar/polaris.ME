@@ -1,20 +1,21 @@
-from sentence_transformers import SentenceTransformer
-print("LOADING EMBEDDING MODEL")
-model = SentenceTransformer("all-MiniLM-L6-v2")
-print("EMBEDDING MODEL LOADED")
+import os
+
+from dotenv import load_dotenv
+from google import genai
+
+load_dotenv()
+
+client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+
+
 def generate_embeddings(chunks):
-    
-    embeddings = model.encode(chunks)
+    embeddings = []
+
+    for chunk in chunks:
+        response = client.models.embed_content(
+            model="gemini-embedding-001", contents=chunk
+        )
+
+        embeddings.append(response.embeddings[0].values)
 
     return embeddings
-
-if __name__ == "__main__":
-
-    sample_chunks = [
-        "Authentication uses JWT",
-        "Frontend built using React"
-    ]
-
-    vectors = generate_embeddings(sample_chunks)
-
-    print(vectors.shape)

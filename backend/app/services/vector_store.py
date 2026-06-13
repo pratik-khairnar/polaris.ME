@@ -25,7 +25,7 @@ def store_chunks(chunks, embeddings, filename):
 
     collection.add(
         documents=chunks,
-        embeddings=embeddings.tolist(),
+        embeddings=embeddings,
         ids=ids,
         metadatas=metadatas
     )

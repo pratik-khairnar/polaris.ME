@@ -1,7 +1,8 @@
 import numpy as np
 from rank_bm25 import BM25Okapi
 from app.services.vector_store import collection
-from app.services.embeddings import model
+from app.services.embeddings import generate_embeddings
+
 
 
 def hybrid_search(query: str, n_results: int = 8) -> list:
@@ -10,9 +11,11 @@ def hybrid_search(query: str, n_results: int = 8) -> list:
     and Sparse Keyword scores (BM25Okapi).
     """
     # 1. Dense Vector Search
-    query_embedding = model.encode(query)
+    query_embedding = generate_embeddings(
+        [query]
+    )[0]
     vector_results = collection.query(
-        query_embeddings=[query_embedding.tolist()], n_results=n_results
+        query_embeddings=[query_embedding], n_results=n_results
     )
 
     # Fetch safely nested list of documents from vector results
