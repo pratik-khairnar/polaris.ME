@@ -1,0 +1,68 @@
+Design and Analysis of Algorithms 
+Introduction
+Objectives of time and space analysis of algorithms:
+Order Notations(Big-O, Omega, Theta notations)
+(Best average and worst case) time complexity of algorithms such as
+Bubble Sort
+Selection Sort
+Insertion Sort
+Heap Sort
+Time complexity of recursive programs using recurrence relations
+Amortized analysis 
+Extra: Iterative method, Master method, Search Techniques Linear, Binary, Space complexity
+Design Techniques - I
+Divide and Conquer:
+Heap Sort  O(nlogn)
+Quicksort  O(nlogn) O(n^2)
+Mergersort O(nlogn) 
+Strassen's Matrix Multiplication O(n^2.81) T(n) = 7T(n/2) + n^2
+Convex Hull GS: O(nlogn) QH: O(nlogn) O(n^2) T(n)=T(k)+T(n−k)+O(n) T(n)=2T(n/2)+O(n)=O(nlogn)
+Greedy Algorithms:
+Activity Selection
+Job Sequencing with deadlines
+Knapsack Problem
+Huffman Encoding
+Optimal Merge Patterns
+Single Source Shortest Paths
+Extra: Huffman Encoding, Activity Selection, Convex Hull
+Design Techniques - II
+Dynamic Programming:
+All Pairs Shortest Path (Floyd Warshall)
+0-1 Knapsack
+Travelling Salesman Problem
+Chained Matrix Multiplication
+Longest Common Subsequence
+Bellman-Ford algorithm
+Subset Sum
+Extra: Egg dropping, cutting a rod
+Design Techniques - III
+Backtracking:
+N-queens Problem
+Hamiltonian Cycles
+Graph Coloring
+Branch and Bound:
+0/1 Knapsack problem
+Travelling Salesman Problem
+Extra: Subset Sum using Backtracking
+Selected Algorithms from various areas
+String Matching:
+The naive string matching Algorithm
+The Robin Karp Algorithm
+The Knuth-Morris-Pratt Algorithm
+Network Flow Algorithms:
+Ford-Fulkerson Algorithm
+Push-relabel Algorithm
+Complexity Theory
+Polynomial Time
+NP-hard and NP-complete problems
+proving NP Completeness using reduction technique
+(e.g. SAT, Independent Set, 3VC, etc.)
+Extra: NP Complete Proofs, Clique, Hamiltonian Cycle, Subset Sum
+Self Study:
+Sorting in linear time
+Elementary graph algorithms
+Minimum Spanning Tree
+Number-Theoretic algorithms
+GCD Algorithm
+Chinese remainder theorem
+Primality testing

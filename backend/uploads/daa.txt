@@ -1,0 +1,233 @@
+Here is a sample, production-grade `README.md` for a random MERN project. I’ve styled it after **DevForge**, a collaborative project management tool for developers.
+
+This template is structured exactly how top-tier open-source projects and engineering teams layout their documentation—which makes it the perfect sample dataset to test **polaris.ME** against!
+
+---
+
+# DevForge
+
+DevForge is a lightweight, real-time collaborative project management platform built specifically for agile development teams. It enables engineering teams to track sprints, manage tasks via interactive Kanban boards, and monitor real-time activity streams.
+
+---
+
+## 🏗️ Architecture Overview
+
+The system utilizes a decoupled client-server architecture:
+
+* **Frontend:** Single Page Application (SPA) built with React and styled via TailwindCSS. State management is handled through Redux Toolkit.
+* **Backend:** RESTful API powered by Node.js and Express, implementing a layered architecture (Controller-Service-Repository pattern).
+* **Database:** MongoDB Atlas utilizing Mongoose ODM for data modeling and structured validation.
+* **Real-Time Layer:** Socket.io for instantaneous Kanban card updates across concurrent user sessions.
+
+---
+
+## ⚡ Quick Start & Local Setup
+
+Follow these steps to set up the development environment on your local machine.
+
+### Prerequisites
+
+* Node.js (v18.x or higher)
+* npm (v9.x or higher)
+* MongoDB Instance (Local or Atlas URL)
+
+### 1. Clone the Repository
+
+```bash
+git clone https://github.com/example/devforge.git
+cd devforge
+
+```
+
+### 2. Backend Configuration
+
+Navigate to the server directory and install dependencies:
+
+```bash
+cd server
+npm install
+
+```
+
+Create a `.env` file in the root of the `/server` directory and populate it with the required environment variables:
+
+```env
+PORT=5000
+MONGODB_URI=mongodb://localhost:27017/devforge
+JWT_SECRET=your_super_secret_jwt_key_here
+NODE_ENV=development
+
+```
+
+Start the development server:
+
+```bash
+npm run dev
+
+```
+
+The server will boot up and listen on `http://localhost:5000`.
+
+### 3. Frontend Configuration
+
+Open a new terminal tab, navigate to the client directory, and install dependencies:
+
+```bash
+cd client
+npm install
+
+```
+
+Create a `.env` file in the root of the `/client` directory:
+
+```env
+VITE_API_BASE_URL=http://localhost:5000/api/v1
+VITE_SOCKET_URL=http://localhost:5000
+
+```
+
+Start the Vite development server:
+
+```bash
+npm run dev
+
+```
+
+The application will be accessible locally at `http://localhost:5173`.
+
+---
+
+## 🔑 Authentication Flow
+
+DevForge implements stateless authentication using JSON Web Tokens (JWT) stored via secure client-side mechanisms.
+
+```
+[Client]                                 [Server]
+   │                                        │
+   ├─────── 1. POST /api/v1/auth/login ────>┤
+   │        (Email & Password)              │
+   │                                        │ ──┐ 2. Validate credentials
+   │                                        │   │ & sign JWT token
+   │                                        │ <─┘
+   |<────── 3. Return JSON response ────────┤
+   │        (User Data + JWT Token)         │
+   │                                        │
+   ├─────── 4. Subseqent Requests ─────────>┤ ──┐ 5. Verify Token via
+   │        Bearer <token> inside Header    │   │ Auth Middleware
+   │                                        │ <─┘
+
+```
+
+1. User submits credentials via `/api/v1/auth/login`.
+2. The server verifies the email and compares the hashed password using `bcrypt`.
+3. Upon successful validation, a token is signed containing the user ID and role, returning it in the HTTP response payload.
+4. The client stores this token in memory and appends it as an `Authorization: Bearer <token>` header for all authenticated network requests.
+
+---
+
+## 🔌 API Specification (User & Task Management)
+
+All API responses return content in standard `application/json` format.
+
+### Authentication Endpoints
+
+#### Register a New User
+
+* **URL:** `/api/v1/auth/register`
+* **Method:** `POST`
+* **Body:**
+```json
+{
+  "name": "Alex Mercer",
+  "email": "alex@devforge.com",
+  "password": "SecurePassword123"
+}
+
+```
+
+
+
+```
+*   **Success Response (201 Created):**
+    ```json
+    {
+      "success": true,
+      "message": "User registered successfully",
+      "token": "eyJhbGciOiJIUzI1NiIsIn..."
+    }
+
+```
+
+#### User Login
+
+* **URL:** `/api/v1/auth/login`
+* **Method:** `POST`
+* **Body:**
+```json
+{
+  "email": "alex@devforge.com",
+  "password": "SecurePassword123"
+}
+
+```
+
+
+
+```
+
+### Tasks & Kanban Board Endpoints
+
+#### Fetch All Tasks
+*   **URL:** `/api/v1/tasks`
+*   **Method:** `GET`
+*   **Headers:** `Authorization: Bearer <token>`
+*   **Success Response (200 OK):**
+    ```json
+    {
+      "success": true,
+      "count": 2,
+      "data": [
+        {
+          "_id": "64b0f1a2c3d4e5f6a7b8c9d0",
+          "title": "Implement RAG pipeline UI",
+          "status": "In Progress",
+          "priority": "High",
+          "assignee": "64b0f1a2c3d4e5f6a7b8c9cc"
+        }
+      ]
+    }
+
+```
+
+#### Create a New Task
+
+* **URL:** `/api/v1/tasks`
+* **Method:** `POST`
+* **Headers:** `Authorization: Bearer <token>`
+* **Body:**
+```json
+{
+  "title": "Fix memory leak in Socket connection",
+  "description": "Clean up event listeners on component unmount.",
+  "priority": "Medium"
+}
+
+```
+
+
+
+```
+
+---
+
+## 🛠️ Troubleshooting & Common Issues
+
+#### Issue: MongoDB Connection Failures
+*   **Symptom:** Server crash immediately upon startup with error `MongooseServerSelectionError`.
+*   **Resolution:** Ensure your local MongoDB service is actively running (`brew services start mongodb-community` on macOS or `sudo systemctl start mongod` on Linux). If utilizing Atlas, confirm your current IP address is whitelisted in the Atlas Network Access panel.
+
+#### Issue: WebSockets Failing to Reconnect
+*   **Symptom:** Kanban boards don't update dynamically across browser windows; console logs show persistent pooling connection drops.
+*   **Resolution:** Verify that `VITE_SOCKET_URL` matches your backend server's port exactly and that CORS rules inside `/server/server.js` explicitly permit traffic originating from your frontend origin (`http://localhost:5173`).
+
+```

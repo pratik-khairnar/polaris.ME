@@ -1,0 +1,7 @@
+Authentication uses JWT.
+
+Users login through the /login endpoint.
+
+The generated token remains valid for 24 hours.
+
+Frontend built using React.
