@@ -1,11 +1,16 @@
 import chromadb
 import uuid
 
+print("INITIALIZING CHROMADB")
+
 client = chromadb.PersistentClient(path="chroma_db")
+print("CHROMADB CLIENT READY")
 
 collection = client.get_or_create_collection(
     name="documents"
 )
+
+print("COLLECTION READY")
 
 def store_chunks(chunks, embeddings, filename):
 

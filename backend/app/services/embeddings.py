@@ -1,7 +1,7 @@
 from sentence_transformers import SentenceTransformer
-
+print("LOADING EMBEDDING MODEL")
 model = SentenceTransformer("all-MiniLM-L6-v2")
-
+print("EMBEDDING MODEL LOADED")
 def generate_embeddings(chunks):
     
     embeddings = model.encode(chunks)
