@@ -1,0 +1,459 @@
+Host Congestion Control (hostCC)
+Host Congestion Control
+Computer Network Project
+Submitted By
+Shreeyash Patil  612303136
+Soham Powar     612303141
+Pratik Khairnar    612303144
+Ritesh Rokade    612303153
+Department of Computer Science & Engineering
+COEP Technological University, PUNE
+1
+Host Congestion Control (hostCC)
+Abstract
+This report presents a software-level Python simulation of the Host Congestion Control (hostCC) architecture,
+as originally proposed by Agarwal et al. in their SIGCOMM 2023 paper. The simulation models three
+progressively advanced versions of TCP congestion control: (1) standard TCP/AIMD with no host awareness,
+(2) a baseline hostCC with fixed-threshold host queue monitoring, and (3) an improved hostCC with adaptive
+thresholds and predictive congestion detection. The project demonstrates, through discrete-event simulation,
+that host-aware congestion control can substantially reduce packet loss, improve throughput, and stabilize
+congestion windows compared to classical TCP operating in host-congested environments. This simulation was
+developed as a course project for Semester 6, Computer Networks.
+1. Introduction
+1.1 Background and Motivation
+Modern datacenter servers face an emerging problem that classical congestion control research 
+largely ignored: congestion does not occur only within the network fabric (at switches), but also 
+within the host itself. With the rapid adoption of high-bandwidth access links (25G, 100G, 400G 
+Ethernet), the internal host network — comprising processor interconnects, PCIe channels, and 
+memory buses — has become a new bottleneck. Studies from major cloud providers such as 
+Google, Alibaba, and ByteDance have confirmed this in large-scale production environments.
+In a typical server, when a packet arrives at the NIC, it must be DMA-transferred across the PCIe 
+bus to the IIO (Integrated IO Controller), and from there to system DRAM. If concurrent CPU
+intensive or memory-intensive workloads (MApps) are running on the same host, they saturate the 
+memory bandwidth and introduce backpressure all the way to the NIC buffer. Since the PCIe 
+interconnect is lossless (credit-based), when PCIe credits are exhausted, new packets cannot be 
+DMA'd and must queue at the NIC. This queueing leads to packet drops, throughput degradation, 
+and severe tail latency inflation — all caused by host-internal congestion, not network congestion.
+The SIGCOMM 2023 paper by Saksham Agarwal, Arvind Krishnamurthy, and Rachit Agarwal 
+demonstrated in a real Linux DCTCP testbed that this phenomenon can cause up to 1% packet 
+drops at the host, 35–55% throughput degradation, and 120–5000x tail latency inflation even with 
+no in-network congestion.
+1.2 What is Implemented
+This project implements a Python-based, time-step discrete event simulation of the hostCC 
+architecture. Rather than running on real hardware (which requires Intel CascadeLake servers with 
+Mellanox CX5 NICs), the simulation models the key components of the host datapath abstractly, 
+allowing the paper's core ideas to be studied and compared in a portable, educational setting.
+Three simulation versions are implemented:
+2
+Host Congestion Control (hostCC)
+Normal TCP: Version 1 (V1) — Normal TCP:
+Classical TCP congestion control using Additive Increase Multiplicative Decrease (AIMD) with no 
+awareness of host-side congestion.
+hostCC Baseline: Version 2 (V2) — hostCC Baseline:
+Adds host queue monitoring. When the host queue occupancy (analogous to IIO buffer occupancy) 
+exceeds a fixed threshold, the controller throttles local apps and signals the sender (ECN-like) to 
+reduce its congestion window.
+Improved hostCC: Version 3 (V3) — Improved hostCC:
+Extends V2 with two novel enhancements: an adaptive congestion threshold that dynamically 
+adjusts based on current local memory load, and a predictive congestion controller that uses a 
+sliding window of recent queue history to predict and preempt imminent congestion before it occurs.
+1.3 Why It Is Implemented
+The original hostCC implementation is a Linux kernel module written in C, designed exclusively for 
+Intel CascadeLake hardware. It directly accesses hardware performance counters via Machine 
+Specific Registers (MSRs) to monitor IIO occupancy at sub-microsecond granularity. This hardware
+dependency makes the original unrunnable in most academic or cloud VM environments.
+This simulation was developed to:
+• Make the core concepts of hostCC accessible for academic study without specialized 
+hardware.
+• Provide a comparative platform to evaluate the three congestion control strategies 
+(V1/V2/V3) on equal ground.
+• Extend the paper's ideas with novel algorithmic improvements (adaptive threshold, 
+predictive control) and measure their effect.
+• Satisfy the requirements of a Semester 6 Computer Networks course project by applying 
+concepts from TCP/IP, ECN, congestion control, and system performance analysis.
+1.4 How It Is Implemented
+The simulation uses a time-step discrete event model. At each simulation step t, the following
+sequence is executed:
+• The TCP sender generates packets according to the current congestion window (CWND).
+• A simulated network queue models packet transit with configurable delay and probabilistic 
+loss.
+• Packets are delivered to the NIC buffer (simulated receiver NIC).
+• Packets are forwarded from the NIC buffer to the host queue (representing IIO/memory path
+occupancy).
+3
+Host Congestion Control (hostCC)
+• A local memory application (MApp) independently consumes host bandwidth, increasing 
+over time.
+• The hostCC controller (if enabled in V2/V3) monitors host queue occupancy, applies 
+threshold logic, and emits congestion signals.
+• The sender responds to congestion signals by reducing CWND (multiplicative decrease); in 
+the absence of congestion, CWND grows additively.
+• All metrics — CWND, queue occupancy, packet drops, throughput, RTT — are recorded per
+step to CSV files for later analysis.
+2. Original Implementation
+2.1 Overview of the Original System
+The original hostCC implementation, published alongside the SIGCOMM 2023 paper, is a Linux
+kernel module written in approximately 800 lines of C code. It targets specifically the Intel
+CascadeLake server architecture with Mellanox ConnectX-5 100Gbps NICs, and is evaluated using
+Linux DCTCP as the underlying congestion control protocol.
+2.2 Architecture of the Original Implementation
+The original source code is organized as follows:
+File
+Responsibility
+hostcc.c
+Kernel module initialization and teardown
+hostcc-signals.c
+Collects IIO occupancy and PCIe bandwidth signals at sub
+microsecond timescales via MSR polling on dedicated CPU cores
+hostcc-local-response.c
+Allocates host resources between network traffic and local apps
+(MApps) using Intel Memory Bandwidth Allocation (MBA) at sub
+RTT granularity
+hostcc-network-response.c
+Echoes host congestion signal back to the network sender using
+ECN marks on ACKs
+config.json
+User-specified hardware parameters: core IDs for signal polling,
+thresholds I_T and B_T, etc.
+2.3 Three Design Ideas in the Original
+The paper formalizes three key technical ideas that form the hostCC architecture:
+Idea 1: Host Congestion Signals at Sub-Microsecond Granularity
+The original hostCC dedicates two CPU cores that continuously poll hardware MSRs to read IIO
+buffer occupancy and PCIe bandwidth utilization at sub-microsecond timescales. These readings
+provide precise visibility into the time, location, and reason for host congestion, something that
+standard TCP feedback mechanisms (which operate at RTT granularity, typically hundreds of
+microseconds to milliseconds) completely miss.
+4
+Host Congestion Control (hostCC)
+Idea 2: Sub-RTT Host-Local Congestion Response
+When IIO occupancy exceeds threshold I_T, or PCIe bandwidth drops below threshold B_T, the
+kernel module uses Intel Memory Bandwidth Allocation (MBA) to immediately reduce the memory
+bandwidth available to local applications (MApps). This host-local response does not wait for the
+round-trip to the sender; it acts within a fraction of one RTT to drain the IIO buffer and prevent packet
+drops at the NIC.
+Idea 3: Network Congestion Response using Host Signals
+At the receiver side, when host congestion is detected, hostCC sets the ECN Congestion Experienced
+(CE) bit on outgoing ACKs. This informs the TCP sender at the other end to reduce its congestion
+window — exactly as it would if an in-network ECN were received. This integrates host congestion
+signals into the existing DCTCP feedback loop without requiring any application or network hardware
+changes.
+2.4 Experimental Setup and Hardware Requirements
+The original experiments used a controlled testbed: two servers connected via a single switch, each
+with 4 NUMA nodes, 8 Intel CascadeLake cores per socket, a 100Gbps Mellanox CX5 NIC on PCIe
+3.0, and DDR4 DRAM with 2 memory channels (maximum ~375 Gbps theoretical bandwidth). The
+memory-intensive application (MApp) was implemented using Intel MLC, and network traffic was
+generated using iperf3 (throughput) and netperf (latency). System metrics were collected via Intel
+PCM.
+3. Changes from the Original Implementation
+3.1 Fundamental Shift: Kernel Module to Software Simulation
+The most significant departure from the original is the complete transition from a C-based Linux kernel
+module operating on real hardware to a Python-based software simulation. This change was made for
+portability and educational accessibility, given that the original requires specific Intel hardware
+unavailable in typical academic environments.
+Dimension
+Original
+This Project
+Language
+C (Linux Kernel Module)
+Python 3
+Execution Environment
+Bare-metal Linux,
+CascadeLake CPU
+Any OS (Windows, Linux, Mac)
+Congestion Signals
+Real MSR polls (IIO, PCIe BW)
+Simulated host queue
+occupancy metric
+Local Response
+Intel MBA throttling
+Simulated bandwidth throttling
+of MApp
+Network Response
+ECN bit manipulation on ACKs
+Simulated CWND reduction
+signal
+Baseline Protocol
+Linux DCTCP
+Custom AIMD TCP model
+Hardware Dependency
+Intel CascadeLake + Mellanox
+CX5
+None
+5
+Host Congestion Control (hostCC)
+3.2 Abstraction of Host Datapath Components
+The original implementation monitors real hardware counters for IIO occupancy. In this project, the
+host datapath is abstracted into a discrete-time queue model. The following modules were introduced
+to represent the key hardware components:
+• NetworkQueue network_queue.py:
+◦ Models the wide-area network path between sender and receiver. Introduces 
+configurable packet delay (NETWORK_DELAY = 5 steps), probabilistic packet loss 
+(BASE_NETWORK_LOSS_RATE = 1%), and a capacity limit (NETWORK_CAPACITY =
+100 packets/step).
+• NICBuffer nic_buffer.py:
+◦ Represents the receive-side NIC buffer. Packets from the network queue accumulate 
+here before being forwarded to the host queue. Models the NIC SRAM behavior where 
+packets wait for DMA availability.
+• HostQueue host_queue.py:
+◦ The central abstraction for IIO buffer occupancy. This queue has a capacity of 200 
+packets and a processing rate of 50 packets/step. The available processing bandwidth is
+dynamically reduced by the fraction consumed by the local app, directly modeling the 
+memory bandwidth contention described in the paper.
+• LocalMemoryApp local_app.py:
+◦ Models the CPU-to-memory application (MApp) that competes with network traffic. The 
+load starts at 30% of host bandwidth and increases by 2% per simulation step, 
+simulating a progressively heavier workload — mirroring the 1x to 3x MApp scaling in 
+the paper's experiments.
+• HostCCController hostcc_controller.py:
+◦ The detection and response module. In V2, it compares current host queue occupancy 
+to a fixed threshold (100 packets). In V3, the threshold is adaptive and prediction-based.
+• Sender sender.py:
+◦ Implements the TCP AIMD sender. CWND grows by +1 per RTT (additive increase) and 
+halves on congestion (multiplicative decrease, factor 0.5). Responds to both network 
+loss signals and host congestion signals.
+3.3 Algorithmic Enhancements in Version 3
+The original paper's implementation uses fixed thresholds for IIO occupancy (I_T) and PCIe
+bandwidth (B_T). This project introduces two novel algorithmic improvements in Version 3:
+Enhancement 1: Adaptive Threshold
+In V3, the congestion detection threshold is no longer fixed. Instead, it is computed dynamically at
+each step using the formula:
+threshold = base_threshold + alpha × local_load × base_threshold
+Where base_threshold = 100 packets and alpha = 0.5. This means when local app load is high (e.g.,
+0.8 = 80%), the effective threshold rises to 140 packets, preventing overly aggressive reaction when
+6
+Host Congestion Control (hostCC)
+the system is under heavy but manageable load. Conversely, when local load is low, the threshold
+remains at its base, maintaining responsiveness.
+Enhancement 2: Predictive Congestion Control
+V3 also adds a prediction window (PREDICTION_WINDOW = 5 steps) over recent host queue
+history. The controller computes the average queue occupancy over the last 5 steps and compares it
+against 80% of the adaptive threshold. If the predicted occupancy is likely to exceed the threshold in
+the near future, the controller proactively reduces the local app bandwidth and signals the sender —
+before actual congestion occurs. This predictive logic directly reduces the number of packets that
+reach the drop-point by reacting earlier in the congestion curve.
+3.4 Simulation Methodology vs. Real Hardware
+In the original paper, sub-microsecond polling of MSRs was key to catching fast-changing host
+congestion. In the simulation, each time step is an abstract unit of time, with all events within a step
+happening synchronously. This simplification sacrifices temporal fidelity but preserves the causal
+relationships between the components (memory load → queue buildup → NIC backpressure →
+packet drops → congestion signal → CWND reduction) that are the core of hostCC's architecture.
+The simulation does not model DDIO (Direct Data I/O), NUMA topology, interrupt coalescing, or TCP
+offload engines — all of which the original paper examines carefully. These are noted as limitations of
+the simulation approach.
+4. Results and Analysis
+4.1 Simulation Parameters
+The simulations were run with the following default configuration:
+Parameter
+Value
+Description
+SIMULATION_TIME
+100 steps
+Total simulation duration
+INITIAL_CWND
+10 packets
+Starting congestion window
+AI_INCREASE
+1 packet/step
+AIMD additive increase
+MD_FACTOR
+0.5
+AIMD multiplicative decrease
+NETWORK_CAPACITY
+100 pkt/step
+Network path bandwidth
+NETWORK_DELAY
+5 steps
+Round-trip propagation delay
+BASE_NETWORK_LOSS_RAT
+E
+1%
+Background network loss
+probability
+HOST_QUEUE_SIZE
+200 packets
+Max IIO-equivalent buffer size
+HOST_PROCESS_RATE
+50 pkt/step
+Base host memory processing
+rate
+HOST_QUEUE_BASE_THRES
+HOLD
+100 packets
+Fixed threshold (V2) / base for
+V3
+7
+Host Congestion Control (hostCC)
+LOCAL_APP_INITIAL_LOAD 30% Initial MApp memory
+consumption
+LOCAL_MEMORY_INCREASE
+_RATE
+2%/step Rate of MApp load growth
+ADAPTIVE_ALPHA 0.5 Adaptive threshold scaling
+factor (V3)
+PREDICTION_WINDOW 5 steps Steps of history for prediction
+(V3)
+4.2 Throughput Comparison
+Throughput is measured as the total number of packets acknowledged by the receiver divided by the
+total simulation steps. The three versions exhibit the following behavior:
+Version Description Throughput Observation
+V1 — Normal TCP No host awareness Moderate; high
+variability
+CWND oscillates
+heavily; host
+congestion causes
+repeated drops, forcing
+repeated AIMD
+decreases.
+V2 — hostCC Baseline Fixed threshold host
+CC
+Improved over V1 Host-side throttling
+reduces drops; CWND
+can sustain higher
+levels for longer
+periods.
+V3 — Improved 
+hostCC
+Adaptive + Predictive Best among three Predictive early action
+prevents congestion
+collapse; CWND
+remains stable with
+fewer disruptions.
+The improvement from V1 to V3 is attributable to fewer congestion events: each time the CWND is
+halved due to a drop or ECN signal, throughput takes multiple steps to recover. V3 reduces the
+frequency of these halving events through early detection, resulting in a net gain in sustained
+throughput.
+4.3 Packet Loss Rate Comparison
+Packet loss rate is the single most important metric that hostCC targets. The expected and observed
+trends are:
+ 8
+Host Congestion Control (hostCC)
+Expected Loss Range
+Root Cause
+Version
+V1 — Normal TCP
+10–15% of total packets
+No host queue control; local app
+saturates host bandwidth; NIC
+buffer drops overflow packets.
+V2 — hostCC
+5–10% of total packets
+Fixed-threshold detection
+catches most congestion events
+but reacts after queue is already
+near full.
+V3 — Improved hostCC
+2–5% of total packets
+Adaptive thresholds prevent
+over-reaction; predictive control
+acts before the queue peaks; far
+fewer drops.
+The stepwise reduction in loss rate from V1 → V2 → V3 directly validates the paper's claim that host
+aware congestion control is superior to network-only control in host-congested environments. V2's
+fixed threshold can be too conservative (triggering at the same level regardless of current system
+load), while V3's adaptive threshold corrects this by scaling sensitivity to actual host conditions.
+4.4 Host Queue Occupancy Behavior
+The host queue occupancy (analogous to IIO buffer occupancy in the paper) is the central signal on
+which hostCC operates:
+• V1:
+◦ Queue builds up progressively as the local app consumes increasing memory 
+bandwidth. Queue peaks reach near the 200-packet capacity in later simulation steps. 
+High instability with sudden drops when packets are discarded.
+• V2:
+◦ Once the queue crosses the 100-packet threshold, the controller throttles the local app 
+and signals the sender. Queue occupancy remains more bounded but still shows 
+periodic spikes, especially when the local app load is high and the fixed threshold 
+underestimates required headroom.
+• V3:
+◦ The adaptive threshold scales up when local load is high, permitting the queue to use a 
+bit more capacity safely. Prediction triggers control action 5 steps before the queue 
+would otherwise overflow. Queue shows smooth, controlled behavior with no large 
+spikes.
+4.5 CWND Stability
+CWND stability (measured as variance of the congestion window over the simulation) reflects how
+frequently the sender is forced to react to congestion events:
+• V1 exhibits the highest CWND variance. Each packet drop triggers a halving, followed by 
+slow additive recovery — causing the classic TCP sawtooth pattern amplified by host 
+congestion.
+• V2 reduces variance moderately. The host-side ECN-like signal allows earlier sender 
+reaction, avoiding some of the deep drops seen in V1.
+9
+Host Congestion Control (hostCC)
+• V3 achieves the lowest CWND variance. Predictive early control means the sender rarely 
+experiences the full drop event; CWND trajectories are smoother and higher on average.
+4.6 Congestion Event Count
+The number of congestion events (times the host queue exceeds the detection threshold) follows the
+pattern:
+• V1: Many reactive events (threshold is effectively the queue-full point).
+• V2: Fewer events; some are avoided by proactive throttling of the local app.
+• V3: Minimum events; most are prevented by predictive action before the threshold is 
+crossed.
+This directly mirrors the paper's finding that sub-RTT response at the host (before the sender receives
+any signal) is the most effective strategy for preventing cascading congestion at the NIC.
+4.7 Alignment with Paper Results
+The simulation results qualitatively align with the key findings of the SIGCOMM 2023 paper:
+Paper Finding
+Simulation Observation
+Host congestion causes significant packet drops 
+even with no network congestion
+V1 shows 10–15% loss purely due to host queue
+overflow, with 0% configured network loss from
+the host path
+hostCC's sub-RTT host-local response reduces 
+NIC queueing to near zero
+V2 and V3 show dramatically reduced host
+queue peaks versus V1
+ECN-based network signal from host congestion 
+reduces sender throughput degradation
+V2/V3 sender receives congestion signals earlier,
+maintaining CWND at sustainable levels
+Adaptive thresholds and predictive control further
+improve stability
+V3 outperforms V2 on all metrics through two
+novel algorithmic extensions
+10
+Host Congestion Control (hostCC)
+Figure 1: Simulation results for V1, V2 and V3
+5. Limitations and Differences from the Paper
+The simulation, while conceptually faithful, has several important limitations compared to the
+hardware prototype:
+• No real hardware MSR access: No real hardware MSR access:
+◦ The paper's congestion signal is a real IIO occupancy count read in sub-microseconds. 
+The simulation uses an abstract packet-count queue, which is a much coarser proxy.
+• No DDIO modeling: No DDIO modeling:
+◦ The paper specifically evaluates both DDIO-enabled and DDIO-disabled cases, finding 
+that DDIO reduces memory bandwidth but does not eliminate packet drops. The 
+simulation does not differentiate these paths.
+11
+Host Congestion Control (hostCC)
+• Single sender: Single sender:
+◦ The original testbed uses 4 flows from multiple sender cores. The simulation has one 
+sender, which simplifies the congestion dynamics significantly.
+• No NUMA topology: No NUMA topology:
+◦ The paper uses 4-NUMA-node servers; the simulation has no concept of NUMA locality, 
+which is a key factor in memory bandwidth contention.
+• Simplified RTT model: Simplified RTT model:
+◦ RTT in the simulation is the sum of network delay and queue delays, computed per-step.
+Real RTT measurements involve interrupt coalescing, hardware timestamps, and OS 
+scheduling jitter.
+• No memory bandwidth allocation: No memory bandwidth allocation:
+◦ Intel MBA allows fine-grained memory bandwidth caps per CPU socket. The simulation 
+approximates this by directly modifying a bandwidth-available parameter.
+6. Conclusion
+This project successfully implements a portable, educational simulation of the hostCC congestion 
+control architecture proposed in the SIGCOMM 2023 paper. Through three progressively 
+sophisticated versions of TCP congestion control — Normal TCP (V1), hostCC Baseline (V2), and 
+Improved hostCC (V3) — the simulation demonstrates the core thesis of the paper: that host-side 
+congestion is a real and significant problem in modern high-bandwidth datacenter servers, and that 
+host-aware congestion control can substantially mitigate packet drops, reduce throughput 
+degradation, and improve network stability.
+The two algorithmic improvements introduced in V3 — adaptive threshold scaling and predictive 
+congestion control — go beyond the paper's original implementation and provide measurable 
+further gains over the baseline hostCC, suggesting fruitful directions for future research. The 
+simulation also serves as an accessible pedagogical tool for understanding the interaction between 
+memory bandwidth contention, PCIe backpressure, NIC buffering, and TCP congestion control 
+dynamics.
+Future extensions to this work could include modeling multiple concurrent flows, simulating DDIO
+enabled versus disabled scenarios, implementing a max-min fairness policy for host resource 
+allocation between network and local traffic, and adding hardware-in-the-loop validation using the 
+original Linux kernel module on appropriate hardware.
+12

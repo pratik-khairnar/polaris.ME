@@ -7,3 +7,6 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     answer: str
+
+class GithubRequest(BaseModel):
+    repo_url: str

@@ -26,11 +26,12 @@ async def upload_file(file: UploadFile = File(...)):
 
     store_chunks(
         chunks,
-        embeddings
+        embeddings,
+        file.filename
     )
 
     return {
-        "message": "File uploaded successfully",
-        "filename": file.filename,
-        "preview": text[:200]
+        "message": "Document indexed successfully",
+        "chunks_stored": len(chunks),
+        "filename": file.filename
     }

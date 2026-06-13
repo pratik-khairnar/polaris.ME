@@ -1,4 +1,5 @@
 import chromadb
+import uuid
 
 client = chromadb.PersistentClient(path="chroma_db")
 
@@ -6,17 +7,22 @@ collection = client.get_or_create_collection(
     name="documents"
 )
 
-def store_chunks(chunks, embeddings):
+def store_chunks(chunks, embeddings, filename):
 
     ids = []
+    metadatas = []
 
     for i in range(len(chunks)):
-        ids.append(str(i))
+        ids.append(str(uuid.uuid4()))
+        metadatas.append({
+            "source": filename
+        })
 
     collection.add(
         documents=chunks,
         embeddings=embeddings.tolist(),
-        ids=ids
+        ids=ids,
+        metadatas=metadatas
     )
 
 def clear_collection():
@@ -31,17 +37,3 @@ def clear_collection():
 
 
 from app.services.embeddings import generate_embeddings
-
-if __name__ == "__main__":
-
-    chunks = [
-        "Authentication uses JWT",
-        "Frontend built using React"
-    ]
-
-    vectors = generate_embeddings(chunks)
-
-    store_chunks(chunks, vectors)
-
-    print("Stored successfully")
-    print(collection.count())

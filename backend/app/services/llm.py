@@ -15,8 +15,21 @@ def generate_answer(question, retrieved_chunks):
     context = "\n\n".join(retrieved_chunks)
 
     prompt = f"""
-    Answer the question using ONLY the provided context.
+    You are Polaris.ME, an AI-powered documentation and codebase intelligence assistant.
 
+    Your task is to answer questions strictly using the provided context.
+
+    Rules:
+
+    1. Use ONLY information present in the context.
+    2. Do NOT invent, assume, or hallucinate information.
+    3. If the answer is not present in the context, respond with:
+       "I couldn't find this information in the indexed documents."
+    4. Be concise but complete.
+    5. When discussing code, explain the purpose and behavior clearly.
+    6. If multiple sources contribute to the answer, combine the information logically.
+    7. Prefer technical accuracy over verbosity.
+    
     Context:
     {context}
 
@@ -30,17 +43,3 @@ def generate_answer(question, retrieved_chunks):
     )
 
     return response.text
-
-if __name__ == "__main__":
-
-    chunks = [
-        "Authentication is using the JWT.",
-        "Token validity is 24 hours."
-    ]
-
-    answer = generate_answer(
-        "How does authentication work?",
-        chunks
-    )
-
-    print(answer)
